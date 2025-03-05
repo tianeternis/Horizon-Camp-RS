@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 from collections import Counter
 from bson import ObjectId
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 load_dotenv()
 
@@ -19,7 +19,28 @@ def connect_to_database():
 
 def get_products(): 
     db = connect_to_database();
-    products = db.get_collection("products").find({}, {"_id": 1, "name": 1 })
+    products = db.get_collection("products").aggregate([
+        {"$match": {"visible": True}},
+        {
+            "$lookup": {
+                "from": "variants",
+                "localField": "_id",
+                "foreignField": "productID",
+                "as": "variants"
+            }
+        },
+        {
+            "$match": {
+                "variants.quantity": { "$gt": 0 },
+            }
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "name": 1
+            }
+        }
+    ])
     return list(products)
 
 # Loại bỏ ký tự đặc biệt, chuyển về chữ thường
@@ -78,7 +99,7 @@ def cosine_similarity(tfidf_document1, tfidf_document2):
 
     return dot_product / (math.sqrt(norm1) * math.sqrt(norm2)) if norm1 > 0 and norm2 > 0 else 0.0;
 
-def get_similar_products(product_id, products, tfidf_matrix):
+def get_similar_products(product_id, products, tfidf_matrix, limit):
     product_index = None
     for index, product in enumerate(products):
         if (product["_id"] == ObjectId(product_id)):
@@ -92,30 +113,36 @@ def get_similar_products(product_id, products, tfidf_matrix):
             similar_products.append((index, similarity))
 
     similar_products.sort(key=lambda x: x[1], reverse=True)
-    similar_products =similar_products[:10]
+    similar_products = similar_products[:limit]
 
     recommendation_products = [];
     for product in similar_products:
         index = product[0];
-        recommendation_products.append(str(products[index]["_id"]))
+        similarity = product[1];
+        print((products[index], product))
+        if (similarity > 0):
+            recommendation_products.append(str(products[index]["_id"]))
 
     return recommendation_products
 
-def get_recommendation_products(product_id):
+def get_recommendation_products(product_id, limit):
     products = get_products()
 
     documents = [product["name"] for product in products]
     tfidf_matrix = get_tfidf_matrix(documents)
 
-    result = get_similar_products(product_id, products, tfidf_matrix)
+    result = get_similar_products(product_id, products, tfidf_matrix, limit)
     return result
 
 app = Flask(__name__)
 
 @app.route("/api/recommendations/<product_id>", methods=["GET"])
 def get_recommendations_api(product_id):
-    res = get_recommendation_products(product_id)
+    limit = request.args.get("limit", 10, type=int)
+    print("limit", limit)
+
+    res = get_recommendation_products(product_id, limit)
     return jsonify(res)
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=6000)
+    app.run(debug=True, port=9090)
