@@ -6,6 +6,7 @@ Horizon Camp is an e-commerce website selling camping gear, integrating a smart 
 
 ## 📂 Project Structure
 
+```bash
 Horizon-Camp-RS/
 ├── api/                               # Flask routes
 │ └── routes.py
@@ -18,6 +19,7 @@ Horizon-Camp-RS/
 ├── main.py                            # Entry point
 ├── .env                               # Environment variables
 └── requirements.txt                   # Required packages
+```
 
 ## 💻 Tech Stack
 
